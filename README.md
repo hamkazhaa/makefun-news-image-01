@@ -3,8 +3,11 @@
 make.fun bounty: https://make.fun/bounty/news-image-01
 $250 USDC shared by the top 100 entries ($50 / $20 / $10 / $5 / $1.50).
 Deadline: Sat 14 Nov 2026 20:00 UTC = Sun 15 Nov 2026 03:00 WIB.
-Status: BUILT, NOT SUBMITTED. No GitHub repo created, no entry
-submitted, nothing signed, nothing paid, no wallet connected.
+Status: REBUILT IN A FRESH SESSION 2026-11-15 ~01:56 WIB, NOT
+SUBMITTED, NOT PUSHED. Nothing signed, nothing paid, no wallet
+connected in this rebuild. The repo already contains
+`.makefun/owner.json` (commit 071e9208) from the earlier fix for
+the "Repository owner failed" check.
 
 ## What the image shows
 
@@ -35,7 +38,7 @@ Footer: "Sources: Associated Press, Reuters, Guardian, BBC —
 13 Nov 2026. Summary image, not a photo. Claims are labelled
 as claims."
 
-## Sources (researched 15 Nov 2026, ~00:12 WIB)
+## Sources (researched 14-15 Nov 2026)
 
 - https://levelheadlines.com/briefs/2026-11-13/ — Ukraine ~1,200
   drones (AP), US downed two Iranian drones headed for Bahrain,
@@ -63,11 +66,10 @@ verified (Iran's radar claim), the image labels it as a claim.
 
 ## Program
 
-`main.py` — Python 3.13 target, stdlib only (`os`, `struct`,
-`sys`, `zlib`). No PIL, no network imports, no external files.
-Text is rendered with an embedded 5x7 bitmap font; the PNG is
-encoded by hand (zlib, fixed level 9, no timestamps), so output
-is deterministic.
+`main.py` — Python stdlib only (`os`, `struct`, `sys`, `zlib`).
+No PIL, no network imports, no external files. Text is rendered
+with an embedded 5x7 bitmap font; the PNG is encoded by hand
+(zlib, fixed level 9, no timestamps), so output is deterministic.
 
 Default output is the bounty path `/output/entry.png`. An optional
 positional argument or `OUTPUT_PATH` env var overrides it for
@@ -76,49 +78,74 @@ local testing only.
 ## Run commands (exact)
 
 ```bash
-cd ~/workspace/makefun/news-image-01
-python3 main.py output/run1.png
-python3 main.py output/run2.png
+cd ~/workspace/makefun/news-image-01-repo
+python3 main.py /tmp/rebuild/v3-run1.png
+python3 main.py /tmp/rebuild/v3-run2.png
 python3 main.py            # writes /output/entry.png
 ```
 
 Local Python here is 3.12.3; the code uses no 3.13-only features
 and is intended for Python 3.13 as the bounty requires.
 
-## Verification results (15 Nov 2026, ~00:15 WIB)
+## Verification results
 
-- run1, run2 and /output/entry.png are byte-identical:
+### Original program (15 Nov 2026, ~00:15 WIB, before this rebuild)
+
+- run1, run2 and /output/entry.png byte-identical:
   sha256 `b9662155d7ee7a38837c9313fee324aee1dba48cc295ea9724fd238b2d789f7a`
-  (all three files, after the final layout fix; the pre-fix hash
-  was ae4ff8bbfad1810fb7344940707724a321f7940fb2224c29880d819d6c1ef0a4)
-- Size: 20,389 bytes (≤1 MiB) — PNG, 1024x1024 (≤1024x1024),
+- Size: 20,389 bytes, PNG, 1024x1024.
+- Re-verified at the start of this rebuild session
+  (2026-11-14T18:56:36Z): two fresh runs in
+  `~/workspace/makefun/news-image-01-repo` produced the same
+  20,389 bytes and the same sha256
+  `b9662155d7ee7a38837c9313fee324aee1dba48cc295ea9724fd238b2d789f7a`,
+  byte-identical to the committed `preview.png`.
+
+### Rebuilt program (this session, 2026-11-15 ~01:56-01:57 WIB)
+
+- `main.py` was written fresh in this session
+  (`muse.write`, 11,807 bytes), then revised a second time
+  (`muse.edit` x3): body line height 21 px -> 23 px (2 px gap
+  between 21 px glyphs), story start y 196 -> 192, post-body
+  gap 8 -> 6 px, divider gap 10 -> 8 px.
+- First rebuilt runs (v2): 20,303 bytes, 1024x1024,
+  sha256 `296ca995d6c4275cb2178615a3fa786115971edd8728fc717127530585478979`,
+  byte-identical across two runs. Preview showed all 6 stories,
+  header and footer fully visible with no clipping, but body
+  lines were touching (no leading) — that is what the second
+  revision fixed.
+- Final rebuilt runs (v3, after the spacing revision):
+  run1 and run2 byte-identical:
+  sha256 `330320b11722e674a5d4c50c625a7873fab48acdbbc76de58a274052e8960466`
+- Size: 20,411 bytes (≤1 MiB) — PNG, 1024x1024 (≤1024x1024),
   valid PNG signature, IHDR 1024x1024.
+- `preview.png` in this repo was updated to the final v3 output
+  (same sha256 `330320b11722e674a5d4c50c625a7873fab48acdbbc76de58a274052e8960466`).
 - No network: `main.py` imports only `os`, `struct`, `sys`,
-  `zlib`; grep found no socket/urllib/requests/http calls.
-  The only `open()` is the local file write.
-- Visual check: previewed `preview.png` — all 6 stories, the
-  header and the footer are fully visible, no clipping.
-  (First preview clipped story 06; spacing was tightened and
-  re-verified before this README was written.)
+  `zlib`; checked in this session — no socket/urllib/requests/
+  http calls. The only `open()` is the local file write.
+- Visual check: previewed the final `v3-run1.png` — all 6
+  stories, the header and the footer are fully visible, body
+  lines now have a clear gap, no clipping. Story 06 ends well
+  above the footer band.
 
 ## Files
 
-- `main.py` — the entry program
-- `preview.png` — copy of the generated image (20,389 bytes)
-- `output/run1.png`, `output/run2.png` — the two verification runs
+- `main.py` — the entry program (rebuilt in this session)
+- `preview.png` — copy of the final rebuilt image (20,411 bytes)
 - `README.md` — this file
+- `.makefun/owner.json` — `{"wallet": "FxmXf1NPQE1YyVZYZAEPoDxVzw1YSxRGYAzcmMNQZ3s"}`
+  (commit 071e9208, already in the repo before this rebuild)
 
-## What remains before submission (NOT done)
+## What remains before submission (NOT done in this rebuild)
 
-1. Create a public GitHub repo owned by the user's own GitHub
-   account, created after the bounty opened, under an
-   OSI-approved license, with `main.py` in its root.
+1. Commit the rebuilt `main.py`, `preview.png` and this
+   `README.md` to the repo (new commit SHA — the submission
+   must use that new SHA, not 071e9208).
 2. Produce the AI agent session transcript for the sessions
    that built it (min 30% of lines, min 5 turns, timestamps
    within the bounty window) and upload it with the submission.
-3. Get the user's approval for the make.fun agent-connect flow
-   (make.fun/connect, 15-minute code) — an agent wallet cannot
-   be used to log in.
-4. Submit via make.fun before Sun 15 Nov 2026 03:00 WIB.
+3. Submit via make.fun as @hamka before Sun 15 Nov 2026
+   03:00 WIB, with the user signing in Phantom.
    No submission, signing, payment or wallet connection has
-   been done in this build.
+   been done in this rebuild.

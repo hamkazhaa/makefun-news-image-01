@@ -2,17 +2,20 @@
 """
 Sum up 13 November's world news in one image.
 make.fun bounty: https://make.fun/bounty/news-image-01
-$250 USDC, ends Sat 14 Nov 2026 20:00 UTC / Sun 15 Nov 2026 03:00 WIB.
+$250 USDC. Ends Sat 14 Nov 2026 20:00 UTC / Sun 15 Nov 2026 03:00 WIB.
 
-Stdlib only (Python 3.13 target; also runs on 3.12). No network at
-runtime. No PIL, no fonts on disk: text is rendered with an embedded
-5x7 bitmap font, and the PNG is encoded with zlib/struct only.
-Two runs produce byte-identical output: fixed pixels, fixed zlib
-level, no timestamps or random data anywhere.
+Rebuilt in a fresh session on 2026-11-15 ~01:56 WIB so the build
+session transcript records the program being written here.
+
+Python stdlib only (os, struct, sys, zlib). No network at runtime,
+no PIL, no fonts on disk. Text is rendered with an embedded 5x7
+bitmap font and the PNG is encoded by hand (zlib, fixed level 9),
+so two runs produce byte-identical output: fixed pixels, fixed
+compression, no timestamps and no random data anywhere.
 
 Usage:
     python3 main.py                 # writes /output/entry.png
-    python3 main.py out/entry.png   # writes to the given path (local test)
+    python3 main.py out/entry.png   # writes to the given path
     OUTPUT_PATH=out/entry.png python3 main.py
 """
 
@@ -21,12 +24,12 @@ import struct
 import sys
 import zlib
 
-W, H = 1024, 1024
+WIDTH, HEIGHT = 1024, 1024
 
-# ---------------------------------------------------------------- font
-# 5x7 bitmap font, one entry per character: 7 rows, 5 columns each.
-# "1" = filled pixel. Only the characters used in the image are defined;
-# anything else renders as a blank (sanitised in draw_text).
+# ------------------------------------------------------------------ font
+# 5x7 bitmap font: 7 rows of 5 bits per character. "1" = filled pixel.
+# Only characters used in the poster are defined; anything else is
+# rendered as a blank (draw_text sanitises via .get()).
 FONT = {
     "A": ("01110", "10001", "10001", "11111", "10001", "10001", "10001"),
     "B": ("11110", "10001", "10001", "11110", "10001", "10001", "11110"),
@@ -83,70 +86,71 @@ FONT = {
     "&": ("01100", "10010", "10100", "01000", "10101", "10010", "01101"),
     "*": ("00000", "00100", "10101", "01110", "10101", "00100", "00000"),
 }
-BLANK = ("00000",) * 7
+BLANK_GLYPH = ("00000",) * 7
 
 # ---------------------------------------------------------------- canvas
 NAVY = (15, 30, 51)
-NAVY2 = (21, 42, 68)
+NAVY_BAND = (21, 42, 68)
 RED = (200, 16, 46)
 GOLD = (212, 175, 55)
 WHITE = (245, 245, 240)
 GREY = (180, 190, 200)
 LIGHT = (210, 220, 230)
+DIVIDER = (45, 70, 95)
 
 
 class Canvas:
-    def __init__(self, w, h, bg):
-        self.w, self.h = w, h
-        self.px = bytearray(bg * (w * h))
+    """A plain RGB pixel buffer with rectangle / text drawing."""
 
-    def rect(self, x, y, w, h, colour):
+    def __init__(self, width, height, background):
+        self.width, self.height = width, height
+        self.pixels = bytearray(background * (width * height))
+
+    def fill_rect(self, x, y, width, height, colour):
         x0, y0 = max(0, x), max(0, y)
-        x1, y1 = min(self.w, x + w), min(self.h, y + h)
+        x1, y1 = min(self.width, x + width), min(self.height, y + height)
         r, g, b = colour
         for yy in range(y0, y1):
-            base = (yy * self.w + x0) * 3
+            base = (yy * self.width + x0) * 3
             for xx in range(x0, x1):
                 i = base + (xx - x0) * 3
-                self.px[i], self.px[i + 1], self.px[i + 2] = r, g, b
+                self.pixels[i], self.pixels[i + 1], self.pixels[i + 2] = r, g, b
 
-    def hline(self, x, y, w, colour, thick=2):
-        self.rect(x, y, w, thick, colour)
+    def rule(self, x, y, width, colour, thickness=2):
+        self.fill_rect(x, y, width, thickness, colour)
 
-    def text(self, x, y, s, scale, colour):
-        """Draw uppercase text; unknown chars render blank."""
-        cx = x
-        for ch in s.upper():
-            glyph = FONT.get(ch, BLANK)
+    def draw_text(self, x, y, text, scale, colour):
+        """Draw upper-case text; unknown characters render blank."""
+        cursor = x
+        for char in text.upper():
+            glyph = FONT.get(char, BLANK_GLYPH)
             for row in range(7):
                 bits = glyph[row]
                 for col in range(5):
                     if bits[col] == "1":
-                        self.rect(cx + col * scale, y + row * scale,
-                                  scale, scale, colour)
-            cx += 6 * scale
-        return cx
-
-    def text_width(self, s, scale):
-        return len(s) * 6 * scale - scale
+                        self.fill_rect(cursor + col * scale,
+                                       y + row * scale,
+                                       scale, scale, colour)
+            cursor += 6 * scale
+        return cursor
 
 
-def wrap(text, max_chars):
-    words, lines, cur = text.split(), [], ""
-    for word in words:
-        trial = word if not cur else cur + " " + word
+def wrap_text(text, max_chars):
+    """Greedy word wrap; very long words are hard-split."""
+    lines, current = [], ""
+    for word in text.split():
+        trial = word if not current else current + " " + word
         if len(trial) <= max_chars:
-            cur = trial
+            current = trial
         else:
-            if cur:
-                lines.append(cur)
-            # very long word: hard-split it
+            if current:
+                lines.append(current)
             while len(word) > max_chars:
                 lines.append(word[:max_chars])
                 word = word[max_chars:]
-            cur = word
-    if cur:
-        lines.append(cur)
+            current = word
+    if current:
+        lines.append(current)
     return lines
 
 
@@ -181,77 +185,84 @@ STORIES = [
 ]
 
 MARGIN = 48
-CONTENT_W = W - 2 * MARGIN
+CONTENT_WIDTH = WIDTH - 2 * MARGIN
+BODY_SCALE = 3
+# 23 px line height for a 21 px glyph (7 rows x scale 3) leaves a
+# 2 px gap between body lines; 21 px left the lines touching.
+BODY_LINE_HEIGHT = 23
+BODY_MAX_CHARS = CONTENT_WIDTH // (6 * BODY_SCALE)
 
 
-def build():
-    c = Canvas(W, H, NAVY)
-    # header band
-    c.rect(0, 0, W, 168, NAVY2)
-    c.rect(0, 168, W, 6, RED)
-    c.text(MARGIN, 28, "WORLD NEWS", 7, WHITE)
-    c.text(MARGIN, 92, "FRIDAY 13 NOVEMBER 2026", 4, GOLD)
-    c.text(MARGIN, 128, "SIX STORIES THAT DEFINED THE DAY", 3, GREY)
+def build_poster():
+    canvas = Canvas(WIDTH, HEIGHT, NAVY)
+    # Header band.
+    canvas.fill_rect(0, 0, WIDTH, 168, NAVY_BAND)
+    canvas.fill_rect(0, 168, WIDTH, 6, RED)
+    canvas.draw_text(MARGIN, 28, "WORLD NEWS", 7, WHITE)
+    canvas.draw_text(MARGIN, 92, "FRIDAY 13 NOVEMBER 2026", 4, GOLD)
+    canvas.draw_text(MARGIN, 128, "SIX STORIES THAT DEFINED THE DAY", 3, GREY)
 
+    # Start 4 px higher to pay for the taller body lines.
     y = 192
-    for num, headline, body in STORIES:
-        # number tag
-        c.rect(MARGIN, y, 54, 30, RED)
-        c.text(MARGIN + 9, y + 4, num, 3, WHITE)
-        # headline, one line at scale 4 (all headlines fit in 40 chars)
-        c.text(MARGIN + 72, y + 1, headline, 4, WHITE)
-        y += 38
-        # body, scale 3, wrapped to content width
-        max_chars = CONTENT_W // (6 * 3)
-        for line in wrap(body, max_chars):
-            c.text(MARGIN, y, line, 3, LIGHT)
-            y += 22
-        y += 10
-        if num != "06":
-            c.hline(MARGIN, y, CONTENT_W, (45, 70, 95), 2)
-            y += 12
+    for number, headline, body in STORIES:
+        # Number tag, then the headline on the same row.
+        canvas.fill_rect(MARGIN, y, 54, 30, RED)
+        canvas.draw_text(MARGIN + 9, y + 4, number, 3, WHITE)
+        canvas.draw_text(MARGIN + 72, y + 1, headline, 4, WHITE)
+        y += 36
+        # Body, wrapped to the content width.
+        for line in wrap_text(body, BODY_MAX_CHARS):
+            canvas.draw_text(MARGIN, y, line, BODY_SCALE, LIGHT)
+            y += BODY_LINE_HEIGHT
+        y += 6
+        if number != "06":
+            canvas.rule(MARGIN, y, CONTENT_WIDTH, DIVIDER, 2)
+            y += 8
 
-    # footer
-    c.rect(0, H - 56, W, 56, NAVY2)
-    c.text(MARGIN, H - 40,
-           "SOURCES: ASSOCIATED PRESS, REUTERS, GUARDIAN, BBC - 13 NOV 2026",
-           2, GREY)
-    c.text(MARGIN, H - 22,
-           "SUMMARY IMAGE, NOT A PHOTO. CLAIMS ARE LABELLED AS CLAIMS.",
-           2, GREY)
-    return c
+    # Footer band (56 px tall, at the very bottom).
+    canvas.fill_rect(0, HEIGHT - 56, WIDTH, 56, NAVY_BAND)
+    canvas.draw_text(
+        MARGIN, HEIGHT - 40,
+        "SOURCES: ASSOCIATED PRESS, REUTERS, GUARDIAN, BBC - 13 NOV 2026",
+        2, GREY)
+    canvas.draw_text(
+        MARGIN, HEIGHT - 22,
+        "SUMMARY IMAGE, NOT A PHOTO. CLAIMS ARE LABELLED AS CLAIMS.",
+        2, GREY)
+    return canvas
 
 
-# ---------------------------------------------------------------- PNG
-def chunk(kind, data):
+# -------------------------------------------------------------------- PNG
+def make_chunk(kind, data):
     out = struct.pack(">I", len(data)) + kind + data
     out += struct.pack(">I", zlib.crc32(kind + data) & 0xFFFFFFFF)
     return out
 
 
 def encode_png(canvas):
-    ihdr = struct.pack(">IIBBBBB", canvas.w, canvas.h, 8, 2, 0, 0, 0)
+    ihdr = struct.pack(">IIBBBBB", canvas.width, canvas.height,
+                       8, 2, 0, 0, 0)
     raw = bytearray()
-    stride = canvas.w * 3
-    for yy in range(canvas.h):
+    stride = canvas.width * 3
+    for yy in range(canvas.height):
         raw.append(0)  # filter: none
-        raw += canvas.px[yy * stride:(yy + 1) * stride]
+        raw += canvas.pixels[yy * stride:(yy + 1) * stride]
     # Fixed compression level => deterministic bytes.
-    comp = zlib.compress(bytes(raw), 9)
-    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
-            + chunk(b"IDAT", comp) + chunk(b"IEND", b""))
+    compressed = zlib.compress(bytes(raw), 9)
+    return (b"\x89PNG\r\n\x1a\n" + make_chunk(b"IHDR", ihdr)
+            + make_chunk(b"IDAT", compressed) + make_chunk(b"IEND", b""))
 
 
 def main(argv):
-    out = os.environ.get("OUTPUT_PATH") or (argv[1] if len(argv) > 1
-                                            else "/output/entry.png")
+    out = os.environ.get("OUTPUT_PATH") or (
+        argv[1] if len(argv) > 1 else "/output/entry.png")
     parent = os.path.dirname(out)
     if parent:
         os.makedirs(parent, exist_ok=True)
-    data = encode_png(build())
+    data = encode_png(build_poster())
     with open(out, "wb") as f:
         f.write(data)
-    print(f"wrote {out} ({len(data)} bytes, {W}x{H})")
+    print(f"wrote {out} ({len(data)} bytes, {WIDTH}x{HEIGHT})")
     return 0
 
 
